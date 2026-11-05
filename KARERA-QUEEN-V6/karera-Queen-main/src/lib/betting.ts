@@ -218,7 +218,7 @@ export function describeSelections(betType: BetType, selections: any): string {
   }
   if (isMatrixBet(betType)) {
     const legs: any[] = selections.legs ?? [];
-    return legs.map((l, i) => {
+    return legs.map((l) => {
       const horses: string[] = Array.isArray(l.horses) ? l.horses : [];
       return `R${l.race} → ${horses.map((h) => `#${h}`).join(', ')}`;
     }).join('  ·  ');

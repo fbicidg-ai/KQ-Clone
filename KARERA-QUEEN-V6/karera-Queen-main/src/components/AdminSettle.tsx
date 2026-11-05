@@ -3,16 +3,25 @@ import { useRaces } from '@/lib/useRaces';
 import { supabase, type Race, type Horse, type Bet } from '@/lib/supabase';
 import { useToast } from '@/lib/toast';
 import { Spinner, StatusBadge, EmptyState, Money } from '@/components/ui';
-import { availableBetTypes, BET_TYPES, betTypeCode, betTypeLabel, describeSelections, getCoupledPartner } from '@/lib/betting';
-import { Flag, Check, ChevronRight, AlertTriangle, Sparkles, Wallet, Loader2 } from 'lucide-react';
-
-type Mode = 'FC' | 'DD' | 'XD' | 'DD1';
+import {
+  availableBetTypes,
+  BET_TYPES,
+  betTypeCode,
+  betTypeLabel,
+  describeSelections,
+  getCoupledPartner,
+  isMatrixBet,
+  getBetLegs,
+  MATRIX_UNIT_PRICE,
+} from '@/lib/betting';
+import type { BetType } from '@/lib/supabase';
+import { Flag, Check, AlertTriangle, Sparkles, Wallet, Loader2 } from 'lucide-react';
 
 export function AdminSettle() {
   const { races, horsesByRace, loading, refetch } = useRaces();
   const { notify } = useToast();
   const [selectedRaceId, setSelectedRaceId] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>('FC');
+  const [mode, setMode] = useState<BetType>('FC');
   const [dividend, setDividend] = useState(50);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -24,19 +33,16 @@ export function AdminSettle() {
   // FC winners
   const [fcFirst, setFcFirst] = useState<string | null>(null);
   const [fcSecond, setFcSecond] = useState<string | null>(null);
-  // Combo winners (legs)
+  // Combo winners (legs) — single horse per leg
   const [comboLegs, setComboLegs] = useState<{ race: number; horse: string | null }[]>([]);
 
   useEffect(() => {
     if (!selectedRace) return;
     const avail = availableBetTypes(selectedRace.race_number, races);
-    if (!avail.includes(mode as any)) setMode(avail[0] ?? 'FC');
+    if (!avail.includes(mode)) setMode(avail[0] ?? 'FC');
     fetchBets(selectedRace.id);
   }, [selectedRaceId, selectedRace?.id]);
 
-  // Build legs and clear winners only when the selected race or bet type
-  // actually changes. Live race-data refreshes must NOT wipe picks, so we
-  // track the last race+mode we built for and skip otherwise.
   const lastBuiltKey = useRef<string>('');
   useEffect(() => {
     if (!selectedRace) return;
@@ -44,7 +50,7 @@ export function AdminSettle() {
     if (lastBuiltKey.current === key) return;
     lastBuiltKey.current = key;
     setFcFirst(null); setFcSecond(null); setResult(null);
-    const legRaces = buildLegRaces(selectedRace, sorted, mode);
+    const legRaces = getBetLegs(mode, selectedRace, sorted);
     setComboLegs(legRaces.map((r) => ({ race: r.race_number, horse: null })));
   }, [selectedRace?.id, mode, sorted]);
 
@@ -53,29 +59,31 @@ export function AdminSettle() {
     setBetsForRace((data as Bet[]) ?? []);
   }
 
-  function buildLegRaces(race: Race, all: Race[], m: Mode): Race[] {
-    const sortedAll = [...all].sort((a, b) => a.race_number - b.race_number);
-    const idx = sortedAll.findIndex((r) => r.id === race.id);
-    if (idx === -1) return [race];
-    if (m === 'DD') return [sortedAll[idx], sortedAll[idx + 1]].filter(Boolean) as Race[];
-    if (m === 'XD') return [sortedAll[idx], sortedAll[idx + 2]].filter(Boolean) as Race[];
-    if (m === 'DD1') return [sortedAll[idx], sortedAll[idx + 1], sortedAll[idx + 2]].filter(Boolean) as Race[];
-    return [race];
-  }
+  const isUnitDividend = isMatrixBet(mode);
+  const dividendLabel = isUnitDividend ? 'Dividend Payout (per ₱2 combo)' : 'Dividend Payout (per ₱5 base bet)';
+  const dividendHint = isUnitDividend
+    ? `A 1-combo (₱2) winner gets ₱${dividend.toFixed(2)}; a 4-combo (₱8) winner gets ₱${dividend.toFixed(2)} × (8/2) = ₱${(dividend * 4).toFixed(2)}.`
+    : `A ₱5 winner gets ₱${dividend.toFixed(2)}; a ₱10 winner gets ₱${(dividend * 2).toFixed(2)}.`;
 
   async function settle() {
     if (!selectedRace) return;
     if (mode === 'FC' && (fcFirst == null || fcSecond == null)) { notify('Pick 1st and 2nd for Forecast', 'error'); return; }
     if (mode !== 'FC' && comboLegs.some((l) => l.horse == null)) { notify('Pick all winning horses', 'error'); return; }
-    if (dividend <= 0) { notify('Enter a dividend per ₱5 base bet', 'error'); return; }
+    if (dividend <= 0) { notify('Enter a dividend amount', 'error'); return; }
 
-    let winners: any;
-    if (mode === 'FC') winners = { first: fcFirst, second: fcSecond };
-    else winners = { legs: comboLegs.map((l) => ({ race: l.race, horse: l.horse })) };
+    let p_results: any[];
+    if (mode === 'FC') {
+      p_results = [{ race: selectedRace.race_number, order: [fcFirst, fcSecond] }];
+    } else {
+      p_results = comboLegs.map((l) => ({ race: l.race, order: [l.horse] }));
+    }
 
     setBusy(true);
     const { data, error } = await supabase.rpc('settle_race', {
-      p_race_id: selectedRace.id, p_winners: winners, p_dividend: dividend,
+      p_race_id: selectedRace.id,
+      p_bet_type: mode,
+      p_results: p_results,
+      p_dividend: dividend,
     });
     setBusy(false);
     if (error) { notify(error.message, 'error'); return; }
@@ -86,6 +94,8 @@ export function AdminSettle() {
   }
 
   if (loading) return <div className="p-6 flex justify-center"><Spinner className="text-accent-500" /></div>;
+
+  const availForRace = selectedRace ? availableBetTypes(selectedRace.race_number, races) : [];
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-5">
@@ -131,7 +141,7 @@ export function AdminSettle() {
           <section>
             <h2 className="text-sm font-bold text-ink-300 uppercase tracking-wide mb-2 px-1">Bet Type to Settle</h2>
             <div className="flex flex-wrap gap-2">
-              {availableBetTypes(selectedRace.race_number, races).map((t) => {
+              {availForRace.map((t) => {
                 const info = BET_TYPES.find((b) => b.type === t)!;
                 return (
                   <button
@@ -191,19 +201,17 @@ export function AdminSettle() {
             )}
 
             <div>
-              <label className="label">Dividend Payout (per ₱5 base bet)</label>
+              <label className="label">{dividendLabel}</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500 font-mono">₱</span>
-                <input type="number" min={0} step={5} value={dividend} onChange={(e) => setDividend(Number(e.target.value) || 0)} className="input pl-8" />
+                <input type="number" min={0} step={1} value={dividend} onChange={(e) => setDividend(Number(e.target.value) || 0)} className="input pl-8" />
               </div>
-              <p className="text-xs text-ink-500 mt-1.5">
-                A ₱5 winner gets ₱{dividend.toFixed(2)}; a ₱10 winner gets ₱{(dividend * 2).toFixed(2)}.
-              </p>
+              <p className="text-xs text-ink-500 mt-1.5">{dividendHint}</p>
             </div>
 
             <div className="rounded-xl bg-ink-950 border border-ink-800 p-3 text-xs text-ink-400">
               <p className="font-semibold text-ink-200 mb-1 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 text-warning-600" /> Note</p>
-              Settling marks all PENDING bets on this race as WON or LOST and credits winners’ wallets immediately. This action overwrites prior results if re-run.
+              Settling marks all PENDING {betTypeCode(mode)} bets on this race as WON or LOST and credits winners' wallets immediately. This action overwrites prior results if re-run.
             </div>
 
             <button onClick={settle} disabled={busy} className="btn-accent w-full">
