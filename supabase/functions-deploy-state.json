@@ -1,13 +1,9 @@
 {
-  "projectId": "72357822",
+  "projectId": "72686574",
   "functions": {
     "admin-bootstrap": {
       "hasChanged": false,
       "hash": "45b9409a7cd296b656a1bbc884cf7ee213e2c257652359b8fa7ae3d5bea58f64"
-    },
-    "get-config": {
-      "hasChanged": false,
-      "hash": "7619775d644a0443fafc9f0b50bb6ce6d9a59656b0d8fe89b002042ee13b3bd5"
     }
   }
 }
