@@ -20,7 +20,6 @@ export function AdminRaces() {
 
   async function quickCreateDefault() {
     setCreating(true);
-    // Ensure a full card of `totalRaces` races if none exist.
     const existing = new Set(races.map((r) => r.race_number));
     const toInsert: any[] = [];
     for (let n = 1; n <= totalRaces; n++) {
@@ -42,6 +41,22 @@ export function AdminRaces() {
     const { error } = await supabase.from('races').update({ betting_open: next, updated_at: new Date().toISOString() }).eq('id', race.id);
     if (error) { notify(error.message, 'error'); return; }
     notify(`Betting ${next ? 'opened' : 'closed'} for Race ${race.race_number}`, 'success');
+    await refetch();
+  }
+
+  async function toggleWta(race: Race) {
+    const next = !race.wta_enabled;
+    const { error } = await supabase.from('races').update({ wta_enabled: next, updated_at: new Date().toISOString() }).eq('id', race.id);
+    if (error) { notify(error.message, 'error'); return; }
+    notify(`WTA ${next ? 'activated' : 'deactivated'} for Race ${race.race_number}`, 'success');
+    await refetch();
+  }
+
+  async function toggleP6(race: Race) {
+    const next = !race.p6_enabled;
+    const { error } = await supabase.from('races').update({ p6_enabled: next, updated_at: new Date().toISOString() }).eq('id', race.id);
+    if (error) { notify(error.message, 'error'); return; }
+    notify(`Pick 6 ${next ? 'activated' : 'deactivated'} for Race ${race.race_number}`, 'success');
     await refetch();
   }
 
@@ -93,6 +108,8 @@ export function AdminRaces() {
             horses={horsesByRace[race.id] ?? []}
             schedule={races}
             onToggle={() => toggleBetting(race)}
+            onToggleWta={() => toggleWta(race)}
+            onToggleP6={() => toggleP6(race)}
             onEdit={() => setEditingRace(race)}
             onDelete={() => deleteRace(race)}
             onChanged={refetch}
@@ -108,13 +125,16 @@ export function AdminRaces() {
 }
 
 function RaceRow({
-  race, horses, schedule, onToggle, onEdit, onDelete, onChanged,
+  race, horses, schedule, onToggle, onToggleWta, onToggleP6, onEdit, onDelete, onChanged,
 }: {
   race: Race; horses: Horse[]; schedule: Race[];
-  onToggle: () => void; onEdit: () => void; onDelete: () => void; onChanged: () => Promise<void>;
+  onToggle: () => void; onToggleWta: () => void; onToggleP6: () => void;
+  onEdit: () => void; onDelete: () => void; onChanged: () => Promise<void>;
 }) {
   const { notify } = useToast();
   const avail = availableBetTypes(race.race_number, schedule);
+  const wtaFeasible = Array.from({ length: 7 }, (_, i) => schedule.some((r) => r.race_number === race.race_number + i)).every(Boolean);
+  const p6Feasible = Array.from({ length: 6 }, (_, i) => schedule.some((r) => r.race_number === race.race_number + i)).every(Boolean);
   const [showHorses, setShowHorses] = useState(false);
   const [addingHorse, setAddingHorse] = useState(false);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
@@ -164,6 +184,46 @@ function RaceRow({
           <Trash2 className="w-3.5 h-3.5" /> Delete
         </button>
         <StatusBadge status={race.status} className="ml-auto" />
+      </div>
+
+      <div className="flex items-center gap-3 px-4 py-2 border-t border-ink-800 text-xs bg-ink-950/30 flex-wrap">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-ink-500">Activate:</span>
+        <button
+          onClick={onToggleWta}
+          disabled={!wtaFeasible && !race.wta_enabled}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold transition-all ${
+            race.wta_enabled
+              ? 'bg-brand-500/20 text-brand-300 ring-1 ring-brand-500/40'
+              : wtaFeasible
+                ? 'bg-ink-800 text-ink-400 hover:bg-ink-700'
+                : 'bg-ink-900 text-ink-600 cursor-not-allowed'
+          }`}
+        >
+          {race.wta_enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+          WTA
+          {!wtaFeasible && !race.wta_enabled && <span className="text-[9px] text-ink-600">(needs 7 races)</span>}
+        </button>
+        <button
+          onClick={onToggleP6}
+          disabled={!p6Feasible && !race.p6_enabled}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold transition-all ${
+            race.p6_enabled
+              ? 'bg-brand-500/20 text-brand-300 ring-1 ring-brand-500/40'
+              : p6Feasible
+                ? 'bg-ink-800 text-ink-400 hover:bg-ink-700'
+                : 'bg-ink-900 text-ink-600 cursor-not-allowed'
+          }`}
+        >
+          {race.p6_enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+          Pick 6
+          {!p6Feasible && !race.p6_enabled && <span className="text-[9px] text-ink-600">(needs 6 races)</span>}
+        </button>
+        {race.wta_enabled && !wtaFeasible && (
+          <span className="text-[10px] text-warning-600">Not enough races ahead for WTA</span>
+        )}
+        {race.p6_enabled && !p6Feasible && (
+          <span className="text-[10px] text-warning-600">Not enough races ahead for Pick 6</span>
+        )}
       </div>
 
       {showHorses && (

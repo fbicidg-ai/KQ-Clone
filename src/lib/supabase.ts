@@ -38,6 +38,8 @@ export interface Race {
   betting_open: boolean;
   scheduled_at: string | null;
   stream_url: string;
+  wta_enabled: boolean;
+  p6_enabled: boolean;
   created_at: string;
   updated_at: string;
 }

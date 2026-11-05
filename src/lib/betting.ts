@@ -131,12 +131,15 @@ const LEGS_AFTER: Record<BetType, number> = {
 
 export function availableBetTypes(raceNumber: number, races: Race[]): BetType[] {
   const numbers = new Set(races.map((race) => race.race_number));
+  const startRace = races.find((r) => r.race_number === raceNumber);
   const allTypes: BetType[] = ['FC', 'DD', 'XD', 'DD1', 'P6', 'WTA'];
   return allTypes.filter((type) => {
     if (type === 'WTA') {
+      if (!startRace?.wta_enabled) return false;
       return Array.from({ length: 7 }, (_, index) => numbers.has(raceNumber + index)).every(Boolean);
     }
     if (type === 'P6') {
+      if (!startRace?.p6_enabled) return false;
       return Array.from({ length: 6 }, (_, index) => numbers.has(raceNumber + index)).every(Boolean);
     }
     const needed = LEGS_AFTER[type];
