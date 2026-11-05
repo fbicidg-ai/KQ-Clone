@@ -53,8 +53,8 @@ export function getCoupledPartner(
  *          designated race. Requires current + next + one more.
  *   P6   — Pick 6: winner of 6 consecutive races starting from the current.
  *          Available when at least 6 races remain (current + 5 more).
- *   WTA  — Winner Take All: winner of ALL races on the card.
- *          Available only from Race 1 (all races must exist and be open).
+ *   WTA  — Winner Take All: winner of 7 consecutive races starting from the
+ *          current. Available when at least 7 races remain (current + 6 more).
  */
 
 export interface BetTypeInfo {
@@ -106,12 +106,18 @@ export const BET_TYPES: BetTypeInfo[] = [
     code: 'WTA',
     label: 'Winner Take All',
     short: 'WTA',
-    description: 'Pick the winner of every race on the card. ₱2.00 per combination.',
+    description: 'Pick the winner of 7 consecutive races. ₱2.00 per combination.',
   },
 ];
 
 /** Unit price per combination for WTA and P6 matrix bets. */
 export const MATRIX_UNIT_PRICE = 2.0;
+
+/** Number of legs (races) each bet type spans. */
+const BET_LEG_COUNT: Partial<Record<BetType, number>> = {
+  P6: 6,
+  WTA: 7,
+};
 
 /** Races needed beyond the current race for each bet type. */
 const LEGS_AFTER: Record<BetType, number> = {
@@ -120,16 +126,15 @@ const LEGS_AFTER: Record<BetType, number> = {
   XD: 2,
   DD1: 2,
   P6: 5,
-  WTA: 0,
+  WTA: 6,
 };
 
 export function availableBetTypes(raceNumber: number, races: Race[]): BetType[] {
   const numbers = new Set(races.map((race) => race.race_number));
-  const totalRaces = races.length;
   const allTypes: BetType[] = ['FC', 'DD', 'XD', 'DD1', 'P6', 'WTA'];
   return allTypes.filter((type) => {
     if (type === 'WTA') {
-      return raceNumber === 1 && totalRaces >= 2;
+      return Array.from({ length: 7 }, (_, index) => numbers.has(raceNumber + index)).every(Boolean);
     }
     if (type === 'P6') {
       return Array.from({ length: 6 }, (_, index) => numbers.has(raceNumber + index)).every(Boolean);
@@ -160,11 +165,9 @@ export function getBetLegs(
   const idx = sorted.findIndex((r) => r.id === currentRace.id);
   if (idx === -1) return [];
 
-  if (type === 'WTA') {
-    return sorted;
-  }
-  if (type === 'P6') {
-    return sorted.slice(idx, idx + 6);
+  const legCount = BET_LEG_COUNT[type];
+  if (legCount != null) {
+    return sorted.slice(idx, idx + legCount);
   }
 
   const required = type === 'DD'
