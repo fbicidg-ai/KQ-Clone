@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-ink-950 text-ink-100 font-sans antialiased;
+    min-height: 100vh;
+  }
+  /* Theme-driven overrides: when a data-theme attribute is set on <html>,
+     the CSS variables defined by ThemeProvider override the static palette. */
+  body {
+    background-color: var(--bg-base, #020617);
+    color: var(--text-primary, #f8fafc);
+  }
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+  input, select, textarea, button {
+    @apply font-sans;
+  }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { @apply bg-ink-900; }
+  ::-webkit-scrollbar-thumb { @apply bg-ink-700 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-ink-600; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97];
+  }
+  .btn-primary {
+    @apply btn text-white shadow-lg hover:shadow-brand-500/40;
+    background-image: linear-gradient(to right, var(--brand-500, #0ea5e9), var(--brand-400, #38bdf8));
+  }
+  .btn-primary:hover {
+    background-image: linear-gradient(to right, var(--brand-400, #38bdf8), var(--brand-300, #7dd3fc));
+  }
+  .btn-secondary {
+    @apply btn bg-ink-800 text-ink-100 hover:bg-ink-700 border border-ink-700;
+  }
+  .btn-ghost {
+    @apply btn text-ink-300 hover:text-white hover:bg-ink-800;
+  }
+  .btn-accent {
+    @apply btn text-white shadow-lg hover:shadow-accent-500/40;
+    background-image: linear-gradient(to right, var(--accent-500, #f97316), var(--accent-400, #fb923c));
+  }
+  .btn-accent:hover {
+    background-image: linear-gradient(to right, var(--accent-400, #fb923c), var(--accent-300, #fdba74));
+  }
+  .btn-danger {
+    @apply btn bg-danger-600 text-white hover:bg-danger-700;
+  }
+  .input {
+    @apply w-full rounded-xl bg-ink-900/80 border border-ink-700 px-4 py-3 text-sm text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all duration-200;
+  }
+  .label {
+    @apply block text-xs font-semibold uppercase tracking-wide text-ink-400 mb-1.5;
+  }
+  .card {
+    @apply rounded-2xl border backdrop-blur-md transition-all duration-300;
+    background-color: var(--bg-surface, rgba(15, 23, 42, 0.7));
+    border-color: var(--border-subtle, rgba(30, 41, 59, 0.8));
+  }
+  .card:hover {
+    border-color: var(--brand-500, #0ea5e9);
+    @apply shadow-xl shadow-black/30;
+  }
+  .card-glow {
+    @apply rounded-2xl bg-ink-900/70 border border-brand-500/20 backdrop-blur-md transition-all duration-300;
+    box-shadow: 0 0 40px -12px rgba(14, 165, 233, 0.25);
+  }
+  .card-glow:hover {
+    border-color: rgba(14, 165, 233, 0.4);
+    box-shadow: 0 0 50px -8px rgba(14, 165, 233, 0.35);
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+  .tab-active {
+    @apply bg-brand-500 text-white;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-brand-300 via-brand-400 to-accent-400 bg-clip-text text-transparent;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: var(--bg-surface, rgba(15, 23, 42, 0.7));
+    backdrop-filter: blur(12px);
+  }
+  .gradient-mesh {
+    background-image:
+      radial-gradient(at 15% 15%, var(--gradient-mesh-1, rgba(14,165,233,0.18)) 0px, transparent 50%),
+      radial-gradient(at 85% 5%, var(--gradient-mesh-2, rgba(249,115,22,0.14)) 0px, transparent 50%),
+      radial-gradient(at 50% 90%, var(--gradient-mesh-1, rgba(14,165,233,0.12)) 0px, transparent 50%),
+      radial-gradient(at 90% 70%, var(--gradient-mesh-2, rgba(249,115,22,0.08)) 0px, transparent 50%);
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .animate-splash-zoom { animation: splashZoom 2.6s ease-out both; }
+  .animate-splash-progress { animation: splashProgress 2.6s linear both; }
+  .animate-float { animation: float 6s ease-in-out infinite; }
+  .animate-ticker { animation: ticker 28s linear infinite; }
+  .animate-pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+  .animate-fade-in { animation: fadeIn 0.4s ease-out both; }
+  .animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .animate-pop { animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .animate-shimmer-border { animation: shimmerBorder 3s ease-in-out infinite; }
+  .animate-shimmer-text {
+    background: linear-gradient(90deg, var(--brand-400, #38bdf8) 0%, var(--accent-400, #fb923c) 50%, var(--brand-400, #38bdf8) 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmerText 3s linear infinite;
+  }
+}
+
+@keyframes splashZoom {
+  from { transform: scale(1.05); }
+  to { transform: scale(1.15); }
+}
+
+@keyframes splashProgress {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes shimmerText {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pop {
+  0% { transform: scale(0.9); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes shimmerBorder {
+  0%, 100% { box-shadow: 0 0 24px -8px var(--brand-500, rgba(14, 165, 233, 0.35)); }
+  50% { box-shadow: 0 0 40px -4px var(--accent-500, rgba(249, 115, 22, 0.45)); }
+}
