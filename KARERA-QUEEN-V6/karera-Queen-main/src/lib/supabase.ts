@@ -13,7 +13,7 @@ export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON
   },
 });
 
-export type BetType = 'FC' | 'DD' | 'XD' | 'DD1';
+export type BetType = 'FC' | 'DD' | 'XD' | 'DD1' | 'WTA' | 'P6';
 export type BetStatus = 'PENDING' | 'WON' | 'LOST';
 export type RaceStatus = 'open' | 'closed' | 'settled';
 export type TxType = 'DEPOSIT' | 'WITHDRAWAL' | 'BET' | 'WIN' | 'ADMIN_ADJUST';

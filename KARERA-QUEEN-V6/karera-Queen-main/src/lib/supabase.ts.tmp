@@ -1,0 +1,1 @@
+export type BetType = 'FC' | 'DD' | 'XD' | 'DD1' | 'WTA' | 'P6';

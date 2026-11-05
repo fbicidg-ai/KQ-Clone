@@ -30,40 +30,31 @@ export function getCoupledPartner(
 ): string | null {
   const num = String(horseNumber).trim();
   if (isCoupledEntry(num)) {
-    // This IS the letter-suffixed horse — partner is the base number.
     const base = horseBaseNumber(num);
     return horses.some((h) => String(h.horse_number).trim() === base) ? base : null;
   }
-  // This is a plain number — partner is "<base>A" if that exists.
   const partner = `${num}A`;
   return horses.some((h) => String(h.horse_number).trim() === partner) ? partner : null;
 }
 
 /**
  * Dynamic Bet Availability Engine
- * 
+ *
  * Determines which bet types are available for a given race based on the
- * total number of races in the schedule. The platform supports 4 bet types
- * that span multiple races:
- * 
+ * total number of races in the schedule. The platform supports 6 bet types:
+ *
  *   FC   — Forecast: 1st & 2nd in a single race. Always available on any race
  *          that still has betting open. (Single-race, no dependency.)
  *   DD   — Daily Double: winner of 2 consecutive designated races.
  *          Available when the current race has a next race.
  *   XD   — Extra Double: winner of 2 specific non-consecutive designated races.
- *          Available when the current race is at least 2 races from the end
- *          (i.e. a race beyond the next exists).
+ *          Available when the current race is at least 2 races from the end.
  *   DD+1 — Daily Double + 1: winner of 2 consecutive races PLUS 1 extra
- *          designated race. Requires the current race + next + one more
- *          (so the current race must have at least 2 more races after it).
- * 
- * Rules from the spec, restated for clarity:
- *   - Race 1-6 (out of 8): FC, DD, XD, DD+1 all available.
- *   - Race 7 of 8: only DD and FC (XD and DD+1 locked — no Race 9).
- *   - Race 8 of 8: only FC (final race; all combination bets locked).
- * 
- * Generalised: a bet is available when the races it needs all exist in the
- * schedule (count = total races today).
+ *          designated race. Requires current + next + one more.
+ *   P6   — Pick 6: winner of 6 consecutive races starting from the current.
+ *          Available when at least 6 races remain (current + 5 more).
+ *   WTA  — Winner Take All: winner of ALL races on the card.
+ *          Available only from Race 1 (all races must exist and be open).
  */
 
 export interface BetTypeInfo {
@@ -103,19 +94,46 @@ export const BET_TYPES: BetTypeInfo[] = [
     short: 'DD+1',
     description: 'Pick the winner of 2 consecutive races PLUS 1 extra designated race.',
   },
+  {
+    type: 'P6',
+    code: 'P6',
+    label: 'Pick 6',
+    short: 'P6',
+    description: 'Pick the winner of 6 consecutive races. ₱2.00 per combination.',
+  },
+  {
+    type: 'WTA',
+    code: 'WTA',
+    label: 'Winner Take All',
+    short: 'WTA',
+    description: 'Pick the winner of every race on the card. ₱2.00 per combination.',
+  },
 ];
+
+/** Unit price per combination for WTA and P6 matrix bets. */
+export const MATRIX_UNIT_PRICE = 2.0;
 
 /** Races needed beyond the current race for each bet type. */
 const LEGS_AFTER: Record<BetType, number> = {
-  FC: 0,   // single race
-  DD: 1,   // current + next
-  XD: 2,   // current + the race two slots ahead
-  DD1: 2,  // current + next + one extra
+  FC: 0,
+  DD: 1,
+  XD: 2,
+  DD1: 2,
+  P6: 5,
+  WTA: 0,
 };
 
 export function availableBetTypes(raceNumber: number, races: Race[]): BetType[] {
   const numbers = new Set(races.map((race) => race.race_number));
-  return (['FC', 'DD', 'XD', 'DD1'] as BetType[]).filter((type) => {
+  const totalRaces = races.length;
+  const allTypes: BetType[] = ['FC', 'DD', 'XD', 'DD1', 'P6', 'WTA'];
+  return allTypes.filter((type) => {
+    if (type === 'WTA') {
+      return raceNumber === 1 && totalRaces >= 2;
+    }
+    if (type === 'P6') {
+      return Array.from({ length: 6 }, (_, index) => numbers.has(raceNumber + index)).every(Boolean);
+    }
     const needed = LEGS_AFTER[type];
     return Array.from({ length: needed + 1 }, (_, index) => numbers.has(raceNumber + index)).every(Boolean);
   });
@@ -126,9 +144,9 @@ export function isBetTypeAvailable(type: BetType, raceNumber: number, races: Rac
 }
 
 /**
- * For combination bet types (DD, XD, DD1), returns the leg races the user
- * must pick winners for. For FC, returns just the current race (twice — for
- * 1st and 2nd place picks in that same race).
+ * For combination bet types (DD, XD, DD1, P6, WTA), returns the leg races the
+ * user must pick winners for. For FC, returns just the current race (twice —
+ * for 1st and 2nd place picks in that same race).
  */
 export function getBetLegs(
   type: BetType,
@@ -141,6 +159,13 @@ export function getBetLegs(
   const sorted = [...allRaces].sort((a, b) => a.race_number - b.race_number);
   const idx = sorted.findIndex((r) => r.id === currentRace.id);
   if (idx === -1) return [];
+
+  if (type === 'WTA') {
+    return sorted;
+  }
+  if (type === 'P6') {
+    return sorted.slice(idx, idx + 6);
+  }
 
   const required = type === 'DD'
     ? [0, 1]
@@ -162,12 +187,42 @@ export function betTypeCode(type: BetType): string {
   return BET_TYPES.find((b) => b.type === type)?.code ?? type;
 }
 
+/** True for multi-horse-per-leg matrix bet types (WTA, P6). */
+export function isMatrixBet(type: BetType): boolean {
+  return type === 'WTA' || type === 'P6';
+}
+
+/**
+ * Calculates the total number of combinations and bet cost for a matrix bet
+ * (WTA or P6). Each leg can have multiple horses selected; combinations =
+ * product of the number of horses across all legs. Cost = combos × ₱2.00.
+ *
+ * legs = array of arrays of horse-number strings (one array per leg).
+ */
+export function matrixCombos(legs: string[][]): number {
+  if (legs.length === 0) return 0;
+  return legs.reduce((product, horses) => product * Math.max(horses.length, 0), 1);
+}
+
+export function matrixCost(legs: string[][]): number {
+  const combos = matrixCombos(legs);
+  if (combos <= 0) return 0;
+  return combos * MATRIX_UNIT_PRICE;
+}
+
 /** Builds a human-readable summary of a bet's selections. */
 export function describeSelections(betType: BetType, selections: any): string {
   if (!selections) return '';
   if (betType === 'FC') {
     return `1st: #${selections.first} / 2nd: #${selections.second}`;
   }
+  if (isMatrixBet(betType)) {
+    const legs: any[] = selections.legs ?? [];
+    return legs.map((l, i) => {
+      const horses: string[] = Array.isArray(l.horses) ? l.horses : [];
+      return `R${l.race} → ${horses.map((h) => `#${h}`).join(', ')}`;
+    }).join('  ·  ');
+  }
   const legs: any[] = selections.legs ?? [];
-  return legs.map((l, i) => `R${l.race} → #${l.horse}`).join('  ·  ');
+  return legs.map((l) => `R${l.race} → #${l.horse}`).join('  ·  ');
 }
