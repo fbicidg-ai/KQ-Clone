@@ -68,7 +68,7 @@ export function AdminSettle() {
   async function settle() {
     if (!selectedRace) return;
     if (mode === 'FC' && (fcFirst == null || fcSecond == null)) { notify('Pick 1st and 2nd for Forecast', 'error'); return; }
-    if (mode !== 'FC' && comboLegs.some((l) => l.horse == null)) { notify('Pick all winning horses', 'error'); return; }
+    if (mode !== 'FC' && comboLegs.some((l) => l.horse == null)) { notify('Pick the winning horse for every race', 'error'); return; }
     if (dividend <= 0) { notify('Enter a dividend amount', 'error'); return; }
 
     let p_results: any[];
@@ -159,8 +159,16 @@ export function AdminSettle() {
           {/* Winners */}
           <section className="card p-5 space-y-4">
             <h3 className="text-sm font-bold text-white">
-              {mode === 'FC' ? 'Declare 1st & 2nd (exact order)' : `Declare winners for each leg — ${betTypeLabel(mode)}`}
+              {mode === 'FC' ? 'Declare 1st & 2nd (exact order)' :
+                isMatrixBet(mode) ? `Declare the winner of each race — ${betTypeLabel(mode)}` :
+                `Declare winners for each leg — ${betTypeLabel(mode)}`}
             </h3>
+            {isMatrixBet(mode) && (
+              <p className="text-xs text-brand-300 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-brand-400" />
+                Pick only ONE winning horse per race. A bet wins if the horse it selected for that race matches your declared winner.
+              </p>
+            )}
 
             {mode === 'FC' ? (
               <div className="space-y-4">
@@ -191,7 +199,7 @@ export function AdminSettle() {
                       key={i}
                       race={legRace}
                       horses={horsesByRace[legRace.id] ?? []}
-                      label={`Leg ${i + 1} · Race ${leg.race}`}
+                      label={isMatrixBet(mode) ? `Race ${leg.race} — Winner` : `Leg ${i + 1} · Race ${leg.race}`}
                       value={leg.horse}
                       onChange={(n) => setComboLegs((prev) => prev.map((l, idx) => idx === i ? { ...l, horse: n } : l))}
                     />
