@@ -1,21 +1,37 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase, type Transaction, type TxType, type TxStatus } from '@/lib/supabase';
+import { supabase, type Transaction, type TxType, type TxStatus, type Settings } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { useRaces } from '@/lib/useRaces';
 import { Modal } from '@/components/Modal';
 import { Money, Spinner, StatusBadge, EmptyState } from '@/components/ui';
-import { describeSelections, betTypeCode, betTypeLabel } from '@/lib/betting';
 import {
   Wallet, ArrowDownToLine, ArrowUpFromLine, History, Plus, Minus, Receipt,
   TrendingUp, Banknote, Smartphone, Building2, Upload, X,
 } from 'lucide-react';
+
+const FALLBACK_QR = '/images/bank-payment_(2)_copy_2_copy.jpg';
 
 const CHANNELS = [
   { id: 'GCash', icon: Smartphone, color: 'text-sky-400' },
   { id: 'Maya', icon: Smartphone, color: 'text-emerald-400' },
   { id: 'Bank Transfer', icon: Building2, color: 'bg-amber-400' },
 ];
+
+function useQrCode(): string {
+  const [qrUrl, setQrUrl] = useState<string>(FALLBACK_QR);
+  useEffect(() => {
+    supabase.from('settings').select('qr_code_url').eq('id', 1).maybeSingle()
+      .then(({ data }) => {
+        const s = data as Settings | null;
+        if (s?.qr_code_url) {
+          const { data: pub } = supabase.storage.from('qr-codes').getPublicUrl(s.qr_code_url);
+          if (pub?.publicUrl) setQrUrl(pub.publicUrl);
+        }
+      });
+  }, []);
+  return qrUrl;
+}
 
 export function WalletPage() {
   const { profile, refreshProfile } = useAuth();
@@ -145,6 +161,7 @@ function TxRow({ tx }: { tx: Transaction }) {
 function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
   const { user } = useAuth();
   const { notify } = useToast();
+  const qrUrl = useQrCode();
   const [amount, setAmount] = useState(100);
   const [channel, setChannel] = useState('GCash');
   const [reference, setReference] = useState('');
@@ -194,14 +211,16 @@ function DepositModal({ open, onClose, onDone }: { open: boolean; onClose: () =>
     <Modal open={open} onClose={onClose} title="Cash In">
       <div className="space-y-4">
         <div className="rounded-2xl border border-brand-500/20 bg-brand-500/5 p-4">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
+          <div className="flex flex-col items-center gap-3 mb-3">
+            <div className="text-center">
               <p className="text-sm font-bold text-white">Scan to pay</p>
-              <p className="text-xs text-ink-400 mt-0.5">Use the QR code, then upload your receipt below. </p>
+              <p className="text-xs text-ink-400 mt-0.5">Scan the QR code with your payment app, then upload your receipt below.</p>
             </div>
-            <img src="/images/bank-payment_(2)_copy_2_copy.jpg" alt="Payment QR code" className="w-24 h-24 rounded-xl bg-white object-contain p-1" />
+            <div className="rounded-2xl bg-white p-3 shadow-lg">
+              <img src={qrUrl} alt="Payment QR code" className="w-48 h-48 object-contain" />
+            </div>
           </div>
-          <p className="text-xs text-ink-500">Send the amount to your chosen channel. Your wallet updates after admin approval.</p>
+          <p className="text-xs text-ink-500 text-center">Send the amount to your chosen channel. Your wallet updates after admin approval.</p>
         </div>
         <div>
           <label className="label">Amount (₱)</label>

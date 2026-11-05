@@ -90,5 +90,6 @@ export interface Settings {
   id: number;
   stream_url: string;
   default_race_count: number;
+  qr_code_url: string;
   updated_at: string;
 }

@@ -1,13 +1,14 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { supabase, type Transaction, type Profile } from '@/lib/supabase';
+import { supabase, type Transaction, type Profile, type Settings } from '@/lib/supabase';
 import { useToast } from '@/lib/toast';
 import { Modal } from '@/components/Modal';
 import { Money, Spinner, StatusBadge, EmptyState } from '@/components/ui';
 import {
   Wallet, ArrowDownToLine, ArrowUpFromLine, Check, X, Loader2, Search, Users, SlidersHorizontal,
+  Upload, Trash2, QrCode,
 } from 'lucide-react';
 
-type Tab = 'PENDING' | 'HISTORY' | 'USERS';
+type Tab = 'PENDING' | 'HISTORY' | 'USERS' | 'QR';
 
 export function AdminFinance() {
   const { notify } = useToast();
@@ -88,7 +89,7 @@ export function AdminFinance() {
 
       <div className="flex items-center gap-1.5">
         <div className="flex gap-1.5 flex-1">
-          {(['PENDING', 'HISTORY', 'USERS'] as Tab[]).map((t) => (
+          {(['PENDING', 'HISTORY', 'USERS', 'QR'] as Tab[]).map((t) => (
             <button key={t} onClick={() => setTab(t)} className={`chip px-3 py-1.5 ${tab === t ? 'tab-active' : 'bg-ink-800 text-ink-300'}`}>{t}</button>
           ))}
         </div>
@@ -161,6 +162,8 @@ export function AdminFinance() {
             })
           )}
         </div>
+      ) : tab === 'QR' ? (
+        <QrTab />
       ) : (
         <UsersTab profiles={profiles} onAdjust={setAdjustTarget} />
       )}
@@ -255,5 +258,125 @@ function AdjustModal({ profile, onClose, onDone }: { profile: Profile; onClose: 
         </div>
       </div>
     </Modal>
+  );
+}
+
+function QrTab() {
+  const { notify } = useToast();
+  const [qrPath, setQrPath] = useState<string>('');
+  const [qrUrl, setQrUrl] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  const loadQr = useCallback(async () => {
+    const { data } = await supabase.from('settings').select('qr_code_url').eq('id', 1).maybeSingle();
+    const s = data as Settings | null;
+    const path = s?.qr_code_url || '';
+    setQrPath(path);
+    if (path) {
+      const { data: pub } = supabase.storage.from('qr-codes').getPublicUrl(path);
+      setQrUrl(pub?.publicUrl || '');
+    } else {
+      setQrUrl('');
+    }
+  }, []);
+
+  useEffect(() => { loadQr(); }, [loadQr]);
+
+  async function handleUpload(file: File) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      notify('Please upload a JPG, PNG, or WebP image.', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      notify('Image must be 5 MB or smaller.', 'error');
+      return;
+    }
+    setUploading(true);
+    const ext = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1];
+    const newPath = `payment-qr.${ext}`;
+    const { error: upErr } = await supabase.storage.from('qr-codes')
+      .upload(newPath, file, { contentType: file.type, upsert: true });
+    if (upErr) {
+      setUploading(false);
+      notify('Could not upload the QR image. Please try again.', 'error');
+      return;
+    }
+    const { error: dbErr } = await supabase.from('settings')
+      .update({ qr_code_url: newPath, updated_at: new Date().toISOString() }).eq('id', 1);
+    setUploading(false);
+    if (dbErr) { notify('Upload succeeded but could not save the setting.', 'error'); return; }
+    notify('QR code updated. Players will see the new image immediately.', 'success');
+    await loadQr();
+  }
+
+  async function handleRemove() {
+    setRemoving(true);
+    if (qrPath) {
+      await supabase.storage.from('qr-codes').remove([qrPath]);
+    }
+    const { error } = await supabase.from('settings')
+      .update({ qr_code_url: '', updated_at: new Date().toISOString() }).eq('id', 1);
+    setRemoving(false);
+    if (error) { notify('Could not remove the QR code.', 'error'); return; }
+    notify('QR code removed. Players will see the default image.', 'success');
+    await loadQr();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <QrCode className="w-5 h-5 text-brand-400" />
+          <h2 className="text-sm font-bold text-white uppercase tracking-wide">Payment QR Code</h2>
+        </div>
+        <p className="text-xs text-ink-500 mb-4">
+          This QR code is shown to players in the Cash In screen when they scan to pay.
+          Upload a clear, scannable image of your payment QR (GCash, Maya, or bank transfer).
+        </p>
+
+        <div className="flex flex-col items-center gap-4">
+          {qrUrl ? (
+            <div className="rounded-2xl bg-white p-4 shadow-lg">
+              <img src={qrUrl} alt="Current payment QR code" className="w-48 h-48 object-contain" />
+            </div>
+          ) : (
+            <div className="w-48 h-48 rounded-2xl border-2 border-dashed border-ink-700 bg-ink-950 flex flex-col items-center justify-center gap-2">
+              <QrCode className="w-12 h-12 text-ink-700" />
+              <span className="text-xs text-ink-600 text-center px-4">No QR code uploaded yet.<br />Players see a default image.</span>
+            </div>
+          )}
+
+          <div className="flex gap-2 w-full">
+            <label className="btn-primary flex-1 cursor-pointer flex items-center justify-center gap-2 py-2.5 text-sm">
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {uploading ? 'Uploading…' : 'Upload New QR'}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleUpload(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {qrUrl && (
+              <button
+                onClick={handleRemove}
+                disabled={removing}
+                className="btn-secondary py-2.5 px-4 text-sm text-danger-500 flex items-center justify-center gap-2"
+              >
+                {removing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Remove
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-ink-600 text-center">JPG, PNG, or WebP · maximum 5 MB · recommended 400×400px or larger</p>
+        </div>
+      </div>
+    </div>
   );
 }
