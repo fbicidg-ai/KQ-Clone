@@ -18,7 +18,6 @@ export function UserDashboard() {
 
   useEffect(() => {
     if (!activeRace && races.length) {
-      // pick the first open race, else the last
       const firstOpen = races.find((r) => r.status === 'open' && r.betting_open);
       setActiveRace(firstOpen ?? races[races.length - 1] ?? null);
     }
@@ -42,7 +41,7 @@ export function UserDashboard() {
         <div className="absolute inset-y-0 left-0 flex flex-col justify-center p-5 sm:p-7">
           <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-brand-300">Karera Queen</p>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-display mt-1">Watch live. Bet Smart.</h1>
-          <p className="text-xs sm:text-sm text-ink-200 mt-2 max-w-xs">Four bet types, one live race card.</p>
+          <p className="text-xs sm:text-sm text-ink-200 mt-2 max-w-xs">Six bet types, one live race card.</p>
         </div>
       </section>
 
@@ -131,7 +130,7 @@ export function UserDashboard() {
 function LiveTicker() {
   const items = [
     'KARERA QUEEN ONLINE — BETTING ON THE PHILIPPINES',
-    'Daily Double · Extra Double · DD+1 · Forecast',
+    'WTA · Pick 6 · Daily Double · Extra Double · DD+1 · Forecast',
     'Place your tickets before the gates close',
     'Instant payouts to your wallet after settlement',
   ];
