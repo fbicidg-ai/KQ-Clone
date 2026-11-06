@@ -21,8 +21,8 @@ export function isCoupledEntry(horseNumber: string): boolean {
 
 /**
  * Given a horse number and the full horse list for a race, returns the
- * partner number for a coupled entry (e.g. "1" → "1A" if "1A" exists in the
- * race). Returns null if there is no coupled partner.
+ * partner number for a coupled entry (e.g. "1" → "1A" if "1A" exists in
+ * the race). Returns null if there is no coupled partner.
  */
 export function getCoupledPartner(
   horseNumber: string,
@@ -49,8 +49,8 @@ export function getCoupledPartner(
  *          Available when the current race has a next race.
  *   XD   — Extra Double: winner of 2 specific non-consecutive designated races.
  *          Available when the current race is at least 2 races from the end.
- *   DD+1 — Daily Double + 1: winner of 2 consecutive races PLUS 1 extra
- *          designated race. Requires current + next + one more.
+ *   DD+1 — Daily Double + 1: winner of 3 consecutive races.
+ *          Requires current + next + one more.
  *   P6   — Pick 6: winner of 6 consecutive races starting from the current.
  *          Available when at least 6 races remain (current + 5 more).
  *   WTA  — Winner Take All: winner of 7 consecutive races starting from the
@@ -71,28 +71,28 @@ export const BET_TYPES: BetTypeInfo[] = [
     code: 'FC',
     label: 'Forecast',
     short: 'FC',
-    description: 'Pick the 1st and 2nd place horses in exact order for a single race.',
+    description: 'Pick the 1st and 2nd place horses in exact order for a single race. Multi-horse boxing allowed.',
   },
   {
     type: 'DD',
     code: 'DD',
     label: 'Daily Double',
     short: 'DD',
-    description: 'Pick the winner of 2 consecutive designated races.',
+    description: 'Pick the winner of 2 consecutive designated races. Multi-horse spreading allowed.',
   },
   {
     type: 'XD',
     code: 'XD',
     label: 'Extra Double',
     short: 'XD',
-    description: 'Pick the winner of 2 specific non-consecutive designated races.',
+    description: 'Pick the winner of 2 specific non-consecutive designated races. Multi-horse spreading allowed.',
   },
   {
     type: 'DD1',
     code: 'DD+1',
     label: 'Daily Double + 1',
     short: 'DD+1',
-    description: 'Pick the winner of 2 consecutive races PLUS 1 extra designated race.',
+    description: 'Pick the winner of 3 consecutive races. Multi-horse spreading allowed.',
   },
   {
     type: 'P6',
@@ -112,6 +112,14 @@ export const BET_TYPES: BetTypeInfo[] = [
 
 /** Unit price per combination for WTA and P6 matrix bets. */
 export const MATRIX_UNIT_PRICE = 2.0;
+
+/** Unit price per combination for standard bets (FC, DD, XD, DD1). */
+export const STANDARD_UNIT_PRICE = 5.0;
+
+/** Returns the per-combination unit price for a bet type. */
+export function betUnitPrice(type: BetType): number {
+  return isMatrixBet(type) ? MATRIX_UNIT_PRICE : STANDARD_UNIT_PRICE;
+}
 
 /** Number of legs (races) each bet type spans. */
 const BET_LEG_COUNT: Partial<Record<BetType, number>> = {
@@ -199,9 +207,9 @@ export function isMatrixBet(type: BetType): boolean {
 }
 
 /**
- * Calculates the total number of combinations and bet cost for a matrix bet
+ * Calculates the total number of combinations for a matrix bet
  * (WTA or P6). Each leg can have multiple horses selected; combinations =
- * product of the number of horses across all legs. Cost = combos × ₱2.00.
+ * product of the number of horses across all legs.
  *
  * legs = array of arrays of horse-number strings (one array per leg).
  */
@@ -216,11 +224,52 @@ export function matrixCost(legs: string[][]): number {
   return combos * MATRIX_UNIT_PRICE;
 }
 
+/**
+ * Calculates combinations for standard multi-leg bets (DD, XD, DD1).
+ * Each leg can have multiple horses; combinations = product of horses per leg.
+ * Cost = combos × ₱5.00.
+ */
+export function standardLegsCombos(legs: string[][]): number {
+  if (legs.length === 0) return 0;
+  return legs.reduce((product, horses) => product * Math.max(horses.length, 0), 1);
+}
+
+export function standardLegsCost(legs: string[][]): number {
+  const combos = standardLegsCombos(legs);
+  if (combos <= 0) return 0;
+  return combos * STANDARD_UNIT_PRICE;
+}
+
+/**
+ * Calculates combinations for FC (Forecast) multi-horse selections.
+ * - Standard: first[] × second[] → len(first) × len(second) combos
+ * - Box: N horses → N × (N-1) combos (all orderings of 1st & 2nd)
+ */
+export function fcCombos(first: string[], second: string[], box: string[] | null): number {
+  if (box && box.length >= 2) {
+    return box.length * (box.length - 1);
+  }
+  return first.length * second.length;
+}
+
+export function fcCost(first: string[], second: string[], box: string[] | null): number {
+  const combos = fcCombos(first, second, box);
+  if (combos <= 0) return 0;
+  return combos * STANDARD_UNIT_PRICE;
+}
+
 /** Builds a human-readable summary of a bet's selections. */
 export function describeSelections(betType: BetType, selections: any): string {
   if (!selections) return '';
   if (betType === 'FC') {
-    return `1st: #${selections.first} / 2nd: #${selections.second}`;
+    // Box mode
+    if (selections.box && Array.isArray(selections.box) && selections.box.length > 0) {
+      return `Box: ${selections.box.map((h: string) => `#${h}`).join(', ')}`;
+    }
+    // Array mode
+    const first: string[] = Array.isArray(selections.first) ? selections.first : (selections.first ? [selections.first] : []);
+    const second: string[] = Array.isArray(selections.second) ? selections.second : (selections.second ? [selections.second] : []);
+    return `1st: ${first.map((h) => `#${h}`).join(', ')} / 2nd: ${second.map((h) => `#${h}`).join(', ')}`;
   }
   if (isMatrixBet(betType)) {
     const legs: any[] = selections.legs ?? [];
@@ -229,6 +278,10 @@ export function describeSelections(betType: BetType, selections: any): string {
       return `R${l.race} → ${horses.map((h) => `#${h}`).join(', ')}`;
     }).join('  ·  ');
   }
+  // DD, XD, DD1 — legs with horse arrays
   const legs: any[] = selections.legs ?? [];
-  return legs.map((l) => `R${l.race} → #${l.horse}`).join('  ·  ');
+  return legs.map((l) => {
+    const horses: string[] = Array.isArray(l.horse) ? l.horse : (l.horse ? [l.horse] : (Array.isArray(l.horses) ? l.horses : []));
+    return `R${l.race} → ${horses.map((h) => `#${h}`).join(', ')}`;
+  }).join('  ·  ');
 }
