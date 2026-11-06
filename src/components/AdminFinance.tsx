@@ -294,18 +294,26 @@ function QrTab() {
     }
     setUploading(true);
     const ext = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1];
-    const newPath = `payment-qr.${ext}`;
+    const newPath = `payment-qr-${Date.now()}.${ext}`;
     const { error: upErr } = await supabase.storage.from('qr-codes')
-      .upload(newPath, file, { contentType: file.type, upsert: true });
+      .upload(newPath, file, { contentType: file.type, upsert: false });
     if (upErr) {
       setUploading(false);
-      notify('Could not upload the QR image. Please try again.', 'error');
+      notify(`Upload failed: ${upErr.message}`, 'error');
       return;
     }
     const { error: dbErr } = await supabase.from('settings')
       .update({ qr_code_url: newPath, updated_at: new Date().toISOString() }).eq('id', 1);
+    if (dbErr) {
+      await supabase.storage.from('qr-codes').remove([newPath]);
+      setUploading(false);
+      notify(`Could not save the setting: ${dbErr.message}`, 'error');
+      return;
+    }
+    if (qrPath && qrPath !== newPath) {
+      await supabase.storage.from('qr-codes').remove([qrPath]);
+    }
     setUploading(false);
-    if (dbErr) { notify('Upload succeeded but could not save the setting.', 'error'); return; }
     notify('QR code updated. Players will see the new image immediately.', 'success');
     await loadQr();
   }
@@ -313,7 +321,12 @@ function QrTab() {
   async function handleRemove() {
     setRemoving(true);
     if (qrPath) {
-      await supabase.storage.from('qr-codes').remove([qrPath]);
+      const { error: rmErr } = await supabase.storage.from('qr-codes').remove([qrPath]);
+      if (rmErr) {
+        setRemoving(false);
+        notify(`Could not delete old QR: ${rmErr.message}`, 'error');
+        return;
+      }
     }
     const { error } = await supabase.from('settings')
       .update({ qr_code_url: '', updated_at: new Date().toISOString() }).eq('id', 1);
