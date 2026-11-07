@@ -21,9 +21,9 @@ const CHANNELS = [
 function useQrCode(): string {
   const [qrUrl, setQrUrl] = useState<string>(FALLBACK_QR);
   useEffect(() => {
-    supabase.from('settings').select('qr_code_url').eq('id', 1).maybeSingle()
+    supabase.rpc('get_settings')
       .then(({ data }) => {
-        const s = data as Settings | null;
+        const s = data as any;
         if (s?.qr_code_url) {
           const { data: pub } = supabase.storage.from('qr-codes').getPublicUrl(s.qr_code_url);
           if (pub?.publicUrl) setQrUrl(pub.publicUrl);

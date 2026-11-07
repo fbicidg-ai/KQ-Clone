@@ -23,11 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function fetchProfile(uid: string) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', uid)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc('get_profile', { p_user_id: uid });
     if (error) {
       console.error('profile fetch error', error);
       return;
@@ -98,12 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     const { data: row, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', data.user.id)
-      .maybeSingle();
+      .rpc('get_profile', { p_user_id: data.user.id });
     if (profileError) throw profileError;
-    return { role: (row?.role as Profile['role'] | undefined) ?? 'user' };
+    return { role: ((row as any)?.role as Profile['role'] | undefined) ?? 'user' };
   }
 
   async function signUp(email: string, password: string, fullName: string, mobile: string) {

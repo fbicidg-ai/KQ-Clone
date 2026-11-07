@@ -20,15 +20,11 @@ export function AdminRaces() {
 
   async function quickCreateDefault() {
     setCreating(true);
-    const existing = new Set(races.map((r) => r.race_number));
-    const toInsert: any[] = [];
-    for (let n = 1; n <= totalRaces; n++) {
-      if (!existing.has(n)) toInsert.push({ race_number: n, betting_open: true, stream_url: '' });
-    }
-    if (toInsert.length) {
-      const { error } = await supabase.from('races').insert(toInsert);
-      if (error) { notify(error.message, 'error'); setCreating(false); return; }
-      notify(`Created ${toInsert.length} race slot(s).`, 'success');
+    const { data, error } = await supabase.rpc('create_races', { p_count: totalRaces });
+    if (error) { notify(error.message, 'error'); setCreating(false); return; }
+    const created = (data as any)?.created ?? 0;
+    if (created > 0) {
+      notify(`Created ${created} race slot(s).`, 'success');
     } else {
       notify('Race card is full.', 'info');
     }
@@ -38,7 +34,7 @@ export function AdminRaces() {
 
   async function toggleBetting(race: Race) {
     const next = !race.betting_open;
-    const { error } = await supabase.from('races').update({ betting_open: next, updated_at: new Date().toISOString() }).eq('id', race.id);
+    const { error } = await supabase.rpc('toggle_betting', { p_race_id: race.id, p_betting_open: next });
     if (error) { notify(error.message, 'error'); return; }
     notify(`Betting ${next ? 'opened' : 'closed'} for Race ${race.race_number}`, 'success');
     await refetch();
@@ -61,16 +57,16 @@ export function AdminRaces() {
   }
 
   async function addRace() {
-    const nextNum = (sorted.length ? sorted[sorted.length - 1].race_number : 0) + 1;
-    const { error } = await supabase.from('races').insert({ race_number: nextNum, betting_open: true, stream_url: '' });
+    const { data, error } = await supabase.rpc('create_race');
     if (error) { notify(error.message, 'error'); return; }
-    notify(`Race ${nextNum} added`, 'success');
+    const num = (data as any)?.race_number ?? '?';
+    notify(`Race ${num} added`, 'success');
     await refetch();
   }
 
   async function deleteRace(race: Race) {
     if (!confirm(`Delete Race ${race.race_number}? This also removes its horses and bets.`)) return;
-    const { error } = await supabase.from('races').delete().eq('id', race.id);
+    const { error } = await supabase.rpc('delete_race', { p_race_id: race.id });
     if (error) { notify(error.message, 'error'); return; }
     notify('Race deleted', 'success');
     await refetch();
@@ -140,13 +136,13 @@ function RaceRow({
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
 
   async function toggleScratch(h: Horse) {
-    const { error } = await supabase.from('horses').update({ scratched: !h.scratched }).eq('id', h.id);
+    const { error } = await supabase.rpc('toggle_scratch', { p_horse_id: h.id, p_scratched: !h.scratched });
     if (error) { notify(error.message, 'error'); return; }
     await onChanged();
   }
 
   async function deleteHorse(h: Horse) {
-    const { error } = await supabase.from('horses').delete().eq('id', h.id);
+    const { error } = await supabase.rpc('delete_horse', { p_horse_id: h.id });
     if (error) { notify(error.message, 'error'); return; }
     await onChanged();
   }
@@ -286,7 +282,7 @@ function EditHorseForm({ horse, onClose, onSaved }: { horse: Horse; onClose: () 
   async function save() {
     if (!name.trim() || !jockey.trim()) { notify('Horse name and jockey are required.', 'error'); return; }
     setBusy(true);
-    const { error } = await supabase.from('horses').update({ horse_name: name.trim(), jockey: jockey.trim() }).eq('id', horse.id);
+    const { error } = await supabase.rpc('update_horse', { p_horse_id: horse.id, p_horse_name: name.trim(), p_jockey: jockey.trim() });
     setBusy(false);
     if (error) { notify('Could not update the horse.', 'error'); return; }
     notify('Horse lineup updated.', 'success');
@@ -327,7 +323,7 @@ function AddHorseForm({ raceId, existing, onClose, onAdded }: { raceId: string; 
       notify('Horse number already exists in this race', 'error'); return;
     }
     setBusy(true);
-    const { error } = await supabase.from('horses').insert({ race_id: raceId, horse_number: trimmed, horse_name: name, jockey });
+    const { error } = await supabase.rpc('add_horse', { p_race_id: raceId, p_horse_number: trimmed, p_horse_name: name, p_jockey });
     setBusy(false);
     if (error) { notify(error.message, 'error'); return; }
     const partner = getCoupledPartner(trimmed, existing);
@@ -379,14 +375,11 @@ function RaceEditorModal({ race, onClose, onSaved }: { race: Race; onClose: () =
       return;
     }
     setBusy(true);
-    const { data, error } = await supabase.from('races').update({
-      stream_url: value, betting_open: bettingOpen, status, updated_at: new Date().toISOString(),
-    }).eq('id', race.id).select('id');
+    const { error } = await supabase.rpc('update_race', { p_race_id: race.id, p_stream_url: value, p_scheduled_at: null });
     setBusy(false);
     if (error) { notify(error.message, 'error'); return; }
-    if (!data?.length) {
-      notify('The race could not be saved. Sign out, sign back in as an administrator, and try again.', 'error');
-      return;
+    if (bettingOpen !== race.betting_open) {
+      await supabase.rpc('toggle_betting', { p_race_id: race.id, p_betting_open: bettingOpen });
     }
     notify('Race updated', 'success');
     onSaved();

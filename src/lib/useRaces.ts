@@ -6,6 +6,8 @@ const horseNumberCollator = new Intl.Collator(undefined, { numeric: true, sensit
 /**
  * Subscribes to races + settings + horses via Supabase realtime and exposes
  * a polling fallback. The user and admin dashboards both use this.
+ *
+ * All data is fetched via RPC functions to bypass PostgREST schema cache issues.
  */
 export function useRaces() {
   const [races, setRaces] = useState<Race[]>([]);
@@ -19,19 +21,20 @@ export function useRaces() {
   }, []);
 
   const fetchSettings = useCallback(async () => {
-    const { data } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
-    if (data) setSettings(data as Settings);
+    const { data } = await supabase.rpc('get_settings');
+    if (data) setSettings(data as unknown as Settings);
   }, []);
 
   const fetchHorses = useCallback(async () => {
-    const { data } = await supabase.from('horses').select('*');
+    const { data } = await supabase.rpc('get_horses');
     if (!data) return;
+    const list = data as unknown as Horse[];
     const map: Record<string, Horse[]> = {};
-    for (const h of data as Horse[]) {
+    for (const h of list) {
       (map[h.race_id] ??= []).push(h);
     }
-    for (const list of Object.values(map)) {
-      list.sort((a, b) => horseNumberCollator.compare(a.horse_number, b.horse_number));
+    for (const entries of Object.values(map)) {
+      entries.sort((a, b) => horseNumberCollator.compare(a.horse_number, b.horse_number));
     }
     setHorsesByRace(map);
   }, []);
