@@ -269,8 +269,8 @@ function QrTab() {
   const [removing, setRemoving] = useState(false);
 
   const loadQr = useCallback(async () => {
-    const { data } = await supabase.rpc('get_settings');
-    const s = data as any;
+    const { data } = await supabase.from('settings').select('qr_code_url').eq('id', 1).maybeSingle();
+    const s = data as Settings | null;
     const path = s?.qr_code_url || '';
     setQrPath(path);
     if (path) {
@@ -328,9 +328,15 @@ function QrTab() {
   async function handleRemove() {
     setRemoving(true);
     if (qrPath) {
-      await supabase.storage.from('qr-codes').remove([qrPath]);
+      const { error: rmErr } = await supabase.storage.from('qr-codes').remove([qrPath]);
+      if (rmErr) {
+        setRemoving(false);
+        notify(`Could not delete old QR: ${rmErr.message}`, 'error');
+        return;
+      }
     }
-    const { error } = await supabase.rpc('clear_qr_code');
+    const { error } = await supabase.from('settings')
+      .update({ qr_code_url: '', updated_at: new Date().toISOString() }).eq('id', 1);
     setRemoving(false);
     if (error) { notify('Could not remove the QR code.', 'error'); return; }
     notify('QR code removed. Players will see the default image.', 'success');

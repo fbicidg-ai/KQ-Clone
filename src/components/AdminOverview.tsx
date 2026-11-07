@@ -45,8 +45,16 @@ export function AdminOverview() {
       notify('Paste a full link that starts with https://', 'error');
       return;
     }
-    const { error } = await supabase.rpc('update_stream_url', { p_stream_url: value });
+    const { data, error } = await supabase
+      .from('settings')
+      .update({ stream_url: value, updated_at: new Date().toISOString() })
+      .eq('id', 1)
+      .select('id');
     if (error) { notify(error.message, 'error'); return; }
+    if (!data?.length) {
+      notify('The stream could not be saved. Sign out, sign back in as an administrator, and try again.', 'error');
+      return;
+    }
     setStreamDraft(value);
     notify('Live stream updated. Users will see it instantly.', 'success');
   }
