@@ -14,8 +14,8 @@ export function useRaces() {
   const [loading, setLoading] = useState(true);
 
   const fetchRaces = useCallback(async () => {
-    const { data } = await supabase.from('races').select('*').order('race_number');
-    if (data) setRaces(data as Race[]);
+    const { data } = await supabase.rpc('get_races');
+    if (data) setRaces(data as unknown as Race[]);
   }, []);
 
   const fetchSettings = useCallback(async () => {

@@ -1,2 +1,6 @@
 [functions.admin-bootstrap]
 verify_jwt = false
+
+[functions.qr-upload]
+verify_jwt = true
+

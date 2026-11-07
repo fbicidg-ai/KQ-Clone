@@ -46,7 +46,7 @@ export function AdminRaces() {
 
   async function toggleWta(race: Race) {
     const next = !race.wta_enabled;
-    const { error } = await supabase.from('races').update({ wta_enabled: next, updated_at: new Date().toISOString() }).eq('id', race.id);
+    const { error } = await supabase.rpc('toggle_wta', { p_race_id: race.id, p_enabled: next });
     if (error) { notify(error.message, 'error'); return; }
     notify(`WTA ${next ? 'activated' : 'deactivated'} for Race ${race.race_number}`, 'success');
     await refetch();
@@ -54,7 +54,7 @@ export function AdminRaces() {
 
   async function toggleP6(race: Race) {
     const next = !race.p6_enabled;
-    const { error } = await supabase.from('races').update({ p6_enabled: next, updated_at: new Date().toISOString() }).eq('id', race.id);
+    const { error } = await supabase.rpc('toggle_p6', { p_race_id: race.id, p_enabled: next });
     if (error) { notify(error.message, 'error'); return; }
     notify(`Pick 6 ${next ? 'activated' : 'deactivated'} for Race ${race.race_number}`, 'success');
     await refetch();

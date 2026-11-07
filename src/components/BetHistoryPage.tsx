@@ -20,13 +20,13 @@ export function BetHistoryPage() {
     if (!user) return;
     Promise.all([
       supabase.from('bets').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('races').select('*'),
+      supabase.rpc('get_races'),
     ]).then(([bRes, rRes]) => {
       if (bRes.error) { notify(bRes.error.message, 'error'); return; }
       if (rRes.error) { notify(rRes.error.message, 'error'); return; }
       setBets((bRes.data as Bet[]) ?? []);
       const map: Record<string, Race> = {};
-      for (const r of (rRes.data as Race[]) ?? []) map[r.id] = r;
+      for (const r of ((rRes.data as unknown as Race[]) ?? [])) map[r.id] = r;
       setRaces(map);
     }).finally(() => setLoading(false));
   }, [user, notify]);

@@ -4,6 +4,10 @@
     "admin-bootstrap": {
       "hasChanged": false,
       "hash": "45b9409a7cd296b656a1bbc884cf7ee213e2c257652359b8fa7ae3d5bea58f64"
+    },
+    "qr-upload": {
+      "hasChanged": false,
+      "hash": "4f3d1d98da9218255502ac5083b7a09eba829d6d5503d9c0656c2330caaf8806"
     }
   }
 }
